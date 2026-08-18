@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Teacher Portal — SnapClass{% endblock %}
+{% block nav_teacher %}active{% endblock %}
+
+{% block content %}
+<section class="section" style="padding-top:1rem;">
+  <div class="container" style="max-width: 520px;">
+
+    <div class="flex-between reveal mb-2">
+      <h1 style="font-size:2.2rem;" id="authTitle">Login using <span class="gradient-text">Password</span></h1>
+      <a href="{{ url_for('home') }}" class="btn btn-ghost btn-sm">← Home</a>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div class="glass-card reveal" id="loginForm">
+      <div class="field">
+        <input type="text" id="loginUsername" placeholder=" " autocomplete="username">
+        <label>Username</label>
+        <div class="field-hint"></div>
+      </div>
+      <div class="field">
+        <input type="password" id="loginPassword" placeholder=" " autocomplete="current-password">
+        <label>Password</label>
+        <div class="field-hint"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="grid-2" style="gap:0.75rem;">
+        <button class="btn btn-primary" id="loginBtn">
+          <span class="btn-label">🔑 Login</span><span class="spinner"></span>
+        </button>
+        <button class="btn btn-tertiary" id="showRegisterBtn">
+          <span class="btn-label">Register Instead</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div class="glass-card reveal" id="registerForm" style="display:none;">
+      <div class="field">
+        <input type="text" id="regUsername" placeholder=" " autocomplete="username">
+        <label>Choose a username</label>
+        <div class="field-hint"></div>
+      </div>
+      <div class="field">
+        <input type="text" id="regFullName" placeholder=" " autocomplete="name">
+        <label>Your full name</label>
+        <div class="field-hint"></div>
+      </div>
+      <div class="field">
+        <input type="password" id="regPassword" placeholder=" " autocomplete="new-password">
+        <label>Password</label>
+        <div class="field-hint"></div>
+      </div>
+      <div class="field">
+        <input type="password" id="regConfirm" placeholder=" " autocomplete="new-password">
+        <label>Confirm password</label>
+        <div class="field-hint"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="grid-2" style="gap:0.75rem;">
+        <button class="btn btn-primary" id="registerBtn">
+          <span class="btn-label">✨ Register now</span><span class="spinner"></span>
+        </button>
+        <button class="btn btn-tertiary" id="showLoginBtn">
+          <span class="btn-label">Login Instead</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/teacher_auth.js') }}"></script>
+{% endblock %}

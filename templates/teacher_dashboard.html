@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Teacher Dashboard — SnapClass{% endblock %}
+{% block nav_teacher %}active{% endblock %}
+
+{% block content %}
+<section class="section" style="padding-top:1rem;">
+  <div class="container">
+
+    <div class="flex-between reveal mb-2" style="flex-wrap:wrap; gap:1rem;">
+      <div>
+        <p class="text-muted">Welcome back,</p>
+        <h1 style="font-size:2rem;">{{ teacher.name }} 👋</h1>
+      </div>
+      <button class="btn btn-tertiary" id="logoutBtn">
+        <span class="btn-label">Logout</span><span class="spinner"></span>
+      </button>
+    </div>
+
+    <div class="tab-row reveal mb-2">
+      <button class="btn btn-primary tab-btn" data-tab="attendance" id="tabAttendance">📡 Take Attendance</button>
+      <button class="btn btn-tertiary tab-btn" data-tab="subjects" id="tabSubjects">📚 Manage Subjects</button>
+      <button class="btn btn-tertiary tab-btn" data-tab="records" id="tabRecords">🗂️ Attendance Records</button>
+    </div>
+    <div class="divider"></div>
+
+  
+    <div class="tab-panel" id="panel-attendance">
+      <h2 style="font-size:1.5rem;">Take AI Attendance</h2>
+
+      <div id="noSubjectsWarning" class="glass-card no-hover mt-2" style="display:none;">
+        <p class="text-muted">You haven't created any subjects yet! Head to "Manage Subjects" to create one.</p>
+      </div>
+
+      <div id="attendanceUI" style="display:none;">
+        <div class="grid-2 mt-2" style="align-items:flex-end;">
+          <div class="field" style="margin-bottom:0;">
+            <select id="subjectSelect"></select>
+            <label style="top:-0.55rem; font-size:0.72rem; color:var(--accent-secondary);">Select Subject</label>
+          </div>
+          <button class="btn btn-primary" id="addPhotosBtn">
+            <span class="btn-label">📷 Add Photos</span><span class="spinner"></span>
+          </button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div id="galleryWrap" style="display:none;">
+          <h3 style="font-size:1.15rem;">Added Photos</h3>
+          <div class="grid-3" id="photoGallery" style="margin-top:1rem;"></div>
+          <div class="divider"></div>
+        </div>
+
+        <div class="grid-3" style="gap:0.75rem;">
+          <button class="btn btn-tertiary" id="clearPhotosBtn" disabled>🗑️ Clear all photos</button>
+          <button class="btn btn-secondary" id="runAnalysisBtn" disabled>
+            <span class="btn-label">🔬 Run Face Analysis</span><span class="spinner"></span>
+          </button>
+          <button class="btn btn-primary" id="voiceAttendanceBtn">🎙️ Use Voice Attendance</button>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="tab-panel" id="panel-subjects" style="display:none;">
+      <div class="flex-between" style="flex-wrap:wrap; gap:1rem;">
+        <h2 style="font-size:1.5rem;">Manage Subjects</h2>
+        <button class="btn btn-primary" id="createSubjectBtn">
+          <span class="btn-label">+ Create New Subject</span><span class="spinner"></span>
+        </button>
+      </div>
+      <div id="subjectsManageGrid" class="grid-2 stagger mt-2"></div>
+    </div>
+
+    
+    <div class="tab-panel" id="panel-records" style="display:none;">
+      <h2 style="font-size:1.5rem;">Attendance Records</h2>
+      <div class="table-wrap mt-2">
+        <table class="data-table">
+          <thead>
+            <tr><th>Time</th><th>Subject</th><th>Subject Code</th><th>Attendance</th></tr>
+          </thead>
+          <tbody id="recordsTableBody"></tbody>
+        </table>
+      </div>
+      <p class="text-muted mt-2" id="noRecordsMsg" style="display:none;">No attendance records yet.</p>
+    </div>
+
+  </div>
+</section>
+
+
+<div class="modal-overlay" id="createSubjectModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 style="font-size:1.3rem;">Create New Subject</h2>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <div class="field">
+      <input type="text" id="subCode" placeholder=" ">
+      <label>Subject Code (e.g. CS101)</label>
+      <div class="field-hint"></div>
+    </div>
+    <div class="field">
+      <input type="text" id="subName" placeholder=" ">
+      <label>Subject Name</label>
+      <div class="field-hint"></div>
+    </div>
+    <div class="field">
+      <input type="text" id="subSection" placeholder=" ">
+      <label>Section (e.g. A)</label>
+      <div class="field-hint"></div>
+    </div>
+    <button class="btn btn-primary btn-block" id="createSubjectConfirmBtn">
+      <span class="btn-label">Create Subject Now</span><span class="spinner"></span>
+    </button>
+  </div>
+</div>
+
+
+<div class="modal-overlay" id="shareSubjectModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 style="font-size:1.3rem;">Share Class Link</h2>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <div id="shareModalBody" class="grid-2">
+      <div>
+        <h3 style="font-size:1rem;">Copy Link</h3>
+        <div class="glass-card no-hover mt-1" style="padding:1rem; word-break:break-all; font-size:0.85rem;" id="shareUrlText"></div>
+        <div class="glass-card no-hover mt-1" style="padding:1rem; text-align:center; font-weight:700;" id="shareCodeText"></div>
+        <p class="text-muted mt-1" style="font-size:0.82rem;">Copy this link to share on WhatsApp or Email.</p>
+        <button class="btn btn-tertiary btn-sm mt-1" id="copyLinkBtn">📋 Copy Link</button>
+      </div>
+      <div style="text-align:center;">
+        <h3 style="font-size:1rem;">Scan to Join</h3>
+        <img id="shareQrImg" style="width:100%; max-width:200px; margin-top:0.75rem; border-radius:1rem; background:white; padding:0.5rem;">
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal-overlay" id="addPhotosModal">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <h2 style="font-size:1.3rem;">Capture or Upload Photos</h2>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <p class="text-muted">Add classroom photos to scan for attendance.</p>
+
+    <div class="grid-2 mt-2" style="gap:0.75rem;">
+      <button class="btn tab-btn btn-primary" id="photoTabCamera" data-phototab="camera">📷 Camera</button>
+      <button class="btn tab-btn btn-tertiary" id="photoTabUpload" data-phototab="upload">⬆️ Upload photos</button>
+    </div>
+
+    <div id="photoCameraPanel" class="mt-2">
+      <div class="camera-frame" id="dialogCameraFrame">
+        <video id="dialogVideo" autoplay playsinline muted></video>
+        <div class="corner-ring"></div>
+      </div>
+      <button class="btn btn-primary btn-block mt-2" id="dialogSnapBtn">📸 Take Snapshot</button>
+    </div>
+
+    <div id="photoUploadPanel" class="mt-2" style="display:none;">
+      <input type="file" id="fileUploadInput" accept="image/*" multiple
+             style="width:100%; padding:1rem; background:rgba(255,255,255,0.04); border:1.5px dashed var(--glass-border); border-radius:var(--radius-sm); color:var(--text-secondary);">
+    </div>
+
+    <div class="divider"></div>
+    <button class="btn btn-primary btn-block" data-close-modal>Done</button>
+  </div>
+</div>
+
+
+<div class="modal-overlay" id="resultsModal">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <h2 style="font-size:1.3rem;">Attendance Report</h2>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <p class="text-muted">Please review attendance before confirming.</p>
+    <div class="table-wrap mt-2">
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>ID</th><th>Source</th><th>Status</th></tr></thead>
+        <tbody id="resultsTableBody"></tbody>
+      </table>
+    </div>
+    <div class="grid-2 mt-2" style="gap:0.75rem;">
+      <button class="btn btn-tertiary" id="discardResultsBtn">Discard</button>
+      <button class="btn btn-primary" id="confirmResultsBtn">
+        <span class="btn-label">✅ Confirm &amp; Save</span><span class="spinner"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal-overlay" id="voiceModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 style="font-size:1.3rem;">Voice Attendance</h2>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <p class="text-muted">Record classroom audio of students saying "I am present" — AI will match each voice.</p>
+
+    <div class="flex-center gap-md mt-2">
+      <button class="btn btn-primary" id="voiceRecordBtn" type="button">🎙️ Record classroom audio</button>
+    </div>
+    <span id="voiceRecordStatus" class="text-muted mt-1" style="display:block; text-align:center; font-size:0.85rem;"></span>
+    <audio id="voiceAudioPreview" controls style="display:none; width:100%; margin-top:1rem;"></audio>
+
+    <button class="btn btn-primary btn-block mt-2" id="analyzeVoiceBtn">
+      <span class="btn-label">🔬 Analyze Audio</span><span class="spinner"></span>
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/teacher_dashboard.js') }}"></script>
+{% endblock %}

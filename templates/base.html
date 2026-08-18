@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}SnapClass — AI Powered Attendance{% endblock %}</title>
+  <link rel="icon" href="https://i.ibb.co/YTYGn5qV/logo.png">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+  
+  <div class="bg-layer">
+    <div class="bg-grid"></div>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+    <div class="blob blob-4"></div>
+  </div>
+  <canvas id="particle-canvas"></canvas>
+  <div class="bg-noise"></div>
+
+  
+  <nav class="navbar">
+    <a class="brand" href="{{ url_for('home') }}">
+      <img src="https://i.ibb.co/YTYGn5qV/logo.png" alt="SnapClass logo">
+      <span class="gradient-text">SnapClass</span>
+    </a>
+    <div class="nav-links">
+      <a class="nav-link {% block nav_home %}{% endblock %}" href="{{ url_for('home') }}">Home</a>
+      <a class="nav-link {% block nav_student %}{% endblock %}" href="{{ url_for('student_page') }}">Student Portal</a>
+      <a class="nav-link {% block nav_teacher %}{% endblock %}" href="{{ url_for('teacher_page') }}">Teacher Portal</a>
+    </div>
+    <button class="hamburger" id="hamburgerBtn"><span></span><span></span><span></span></button>
+  </nav>
+
+  <main style="padding-top: 5.5rem; min-height: 100vh; position: relative; z-index: 1;">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="flex-center" style="padding: 2.5rem 1rem; gap: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">
+    <span>Created ❤️ Mansoor  &mdash; SnapClass</span>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

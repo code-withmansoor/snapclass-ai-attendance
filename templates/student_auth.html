@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Student Portal — SnapClass{% endblock %}
+{% block nav_student %}active{% endblock %}
+
+{% block content %}
+<section class="section" style="padding-top:1rem;">
+  <div class="container" style="max-width: 640px;">
+
+    <div class="flex-between reveal mb-2">
+      <div>
+        <h1 style="font-size:2.2rem;">Login using <span class="gradient-text">Face ID</span></h1>
+        <p class="text-muted mt-1">Position your face in the frame and we'll recognize you instantly.</p>
+      </div>
+      <a href="{{ url_for('home') }}" class="btn btn-ghost btn-sm">← Home</a>
+    </div>
+
+    <div class="glass-card reveal" id="faceLoginCard">
+      <div class="camera-frame" id="cameraFrame">
+        <video id="videoEl" autoplay playsinline muted></video>
+        <canvas id="captureCanvas" style="display:none;"></canvas>
+        <img id="capturedImg" style="display:none;" alt="Captured face">
+        <div class="corner-ring"></div>
+        <div class="scan-line" id="scanLine" style="display:none;"></div>
+      </div>
+
+      <div class="flex-center gap-md mt-2" id="cameraControls">
+        <button class="btn btn-primary" id="captureBtn">
+          <span class="btn-label">📸 Capture &amp; Scan</span><span class="spinner"></span>
+        </button>
+      </div>
+      <div class="flex-center gap-md mt-2" id="retakeControls" style="display:none;">
+        <button class="btn btn-tertiary" id="retakeBtn">↺ Retake</button>
+      </div>
+
+      <p class="text-muted mt-1" style="text-align:center; font-size:0.85rem;" id="cameraHint">
+        Allow camera access to continue.
+      </p>
+    </div>
+
+    <!-- Registration panel (hidden until face is unrecognized) -->
+    <div id="joinSubjectSummary" class="glass-card reveal mt-2" style="display:none; padding:0.9rem 1rem; color:var(--text-secondary);"></div>
+
+    <div class="glass-card reveal mt-2" id="registerCard" style="display:none;">
+      <h2 style="font-size:1.4rem;">Register New Profile</h2>
+      <p class="text-muted mt-1">We didn't recognize that face — let's create your Face ID profile.</p>
+
+      <div class="field mt-2">
+        <input type="text" id="regName" placeholder=" " autocomplete="off">
+        <label>Your full name</label>
+        <div class="field-hint"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <h3 style="font-size:1.05rem;">Optional: Voice Enrollment</h3>
+      <p class="text-muted" style="font-size:0.88rem; margin-top:0.4rem;">
+        Record yourself saying something like "I am present, my name is
+        {{'{'}}your name{{'}'}}" — this enables voice-based attendance too.
+      </p>
+
+      <div class="flex-center gap-md mt-2">
+        <button class="btn btn-tertiary" id="recordBtn" type="button">🎙️ Record voice sample</button>
+        <span id="recordStatus" class="text-muted" style="font-size:0.85rem;"></span>
+      </div>
+      <audio id="audioPreview" controls style="display:none; width:100%; margin-top:1rem;"></audio>
+
+      <button class="btn btn-primary btn-block mt-2" id="createAccountBtn">
+        <span class="btn-label">Create Account</span><span class="spinner"></span>
+      </button>
+    </div>
+
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/student.js') }}"></script>
+{% endblock %}

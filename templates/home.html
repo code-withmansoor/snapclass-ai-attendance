@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}SnapClass — AI Powered Attendance{% endblock %}
+{% block nav_home %}active{% endblock %}
+
+{% block content %}
+<section class="section" style="padding-top: 2rem;">
+  <div class="container" style="text-align:center; max-width: 860px;">
+    <div class="pill reveal" style="margin-bottom:1.5rem; animation-delay:.05s;">
+      <span class="badge-pulse"></span> AI-powered attendance, live in seconds
+    </div>
+
+    <h1 class="reveal" style="font-size: clamp(2.4rem, 6vw, 4.2rem); line-height:1.05; animation-delay:.15s;">
+      Attendance that
+      <span class="gradient-text">takes itself.</span>
+    </h1>
+
+    <p class="reveal text-muted" style="font-size:1.15rem; max-width: 620px; margin: 1.5rem auto 2.5rem; animation-delay:.3s;">
+      Face &amp; voice recognition that logs your class in seconds. No roll calls,
+      no spreadsheets — just walk in and get counted.
+    </p>
+
+    <div class="reveal flex-center gap-md" style="animation-delay:.45s; flex-wrap: wrap;">
+      <a href="{{ url_for('student_page') }}" class="btn btn-primary">
+        <span class="btn-label">I'm a Student</span>
+        <span class="spinner"></span> ↗
+      </a>
+      <a href="{{ url_for('teacher_page') }}" class="btn btn-secondary">
+        <span class="btn-label">I'm a Teacher</span>
+        <span class="spinner"></span> ↗
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top: 1rem;">
+  <div class="container">
+    <div class="grid-2 stagger">
+
+      <div class="glass-card" data-reveal>
+        <div class="flex-center" style="width:64px;height:64px;border-radius:1.25rem;background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary)); margin-bottom:1.25rem; font-size:1.8rem;">🎓</div>
+        <h2 style="font-size:1.7rem;">For Students</h2>
+        <p class="text-muted" style="margin-top:0.75rem;">
+          Register your face once. Log in instantly, enroll in subjects with a code
+          or QR scan, and track every class you've attended.
+        </p>
+        <a href="{{ url_for('student_page') }}" class="btn btn-tertiary mt-2">
+          <span class="btn-label">Enter Student Portal</span><span class="spinner"></span> →
+        </a>
+      </div>
+
+      <div class="glass-card" data-reveal data-reveal-delay="120">
+        <div class="flex-center" style="width:64px;height:64px;border-radius:1.25rem;background:linear-gradient(135deg,var(--accent-magenta),var(--accent-tertiary)); margin-bottom:1.25rem; font-size:1.8rem;">🧑‍🏫</div>
+        <h2 style="font-size:1.7rem;">For Teachers</h2>
+        <p class="text-muted" style="margin-top:0.75rem;">
+          Create subjects, share a join code or QR, then snap a classroom photo
+          or record a quick voice roll-call to mark attendance instantly.
+        </p>
+        <a href="{{ url_for('teacher_page') }}" class="btn btn-tertiary mt-2">
+          <span class="btn-label">Enter Teacher Portal</span><span class="spinner"></span> →
+        </a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="grid-3 stagger" style="text-align:center;">
+      <div class="glass-card no-hover" data-reveal>
+        <div class="counter" data-target="99" style="font-size:2.4rem; color:var(--accent-secondary);">0</div>
+        <p class="text-muted">% face-match accuracy</p>
+      </div>
+      <div class="glass-card no-hover" data-reveal data-reveal-delay="100">
+        <div class="counter" data-target="3" style="font-size:2.4rem; color:var(--accent-tertiary);">0</div>
+        <p class="text-muted">Seconds to check-in</p>
+      </div>
+      <div class="glass-card no-hover" data-reveal data-reveal-delay="200">
+        <div class="counter" data-target="0" style="font-size:2.4rem; color:var(--accent-magenta);">0</div>
+        <p class="text-muted">Spreadsheets required</p>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.getElementById('hamburgerBtn').addEventListener('click', function() {
+    this.classList.toggle('open');
+  });
+</script>
+{% endblock %}

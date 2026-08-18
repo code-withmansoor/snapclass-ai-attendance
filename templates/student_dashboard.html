@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard — SnapClass{% endblock %}
+{% block nav_student %}active{% endblock %}
+
+{% block content %}
+<section class="section" style="padding-top:1rem;">
+  <div class="container">
+
+    <div class="flex-between reveal mb-2" style="flex-wrap:wrap; gap:1rem;">
+      <div>
+        <p class="text-muted">Welcome back,</p>
+        <h1 style="font-size:2rem;">{{ student.name }} 👋</h1>
+      </div>
+      <button class="btn btn-tertiary" id="logoutBtn">
+        <span class="btn-label">Logout</span><span class="spinner"></span>
+      </button>
+    </div>
+
+    <div class="flex-between reveal mb-1" style="flex-wrap:wrap; gap:1rem;">
+      <h2 style="font-size:1.5rem;">Your Enrolled Subjects</h2>
+      <button class="btn btn-primary" id="enrollBtn">
+        <span class="btn-label">+ Enroll in Subject</span><span class="spinner"></span>
+      </button>
+    </div>
+    <div class="divider"></div>
+
+    <div id="subjectsGrid" class="grid-2 stagger">
+      <div class="glass-card no-hover skeleton" style="height:180px;"></div>
+      <div class="glass-card no-hover skeleton" style="height:180px;"></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Enroll Modal -->
+<div class="modal-overlay" id="enrollModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 style="font-size:1.3rem;">Enroll in Subject</h2>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <p class="text-muted">Enter the subject code provided by your teacher.</p>
+    <div class="field mt-2">
+      <input type="text" id="joinCodeInput" placeholder=" " autocomplete="off">
+      <label>Subject Code (e.g. CS101)</label>
+      <div class="field-hint"></div>
+    </div>
+    <button class="btn btn-primary btn-block" id="enrollConfirmBtn">
+      <span class="btn-label">Enroll now</span><span class="spinner"></span>
+    </button>
+  </div>
+</div>
+
+<!-- Auto-enroll via join link Modal -->
+<div class="modal-overlay" id="autoEnrollModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 style="font-size:1.3rem;">Quick Enrollment</h2>
+      <button class="modal-close" data-close-modal>✕</button>
+    </div>
+    <p id="autoEnrollText" class="text-muted"></p>
+    <div class="flex-between gap-md mt-2" id="autoEnrollActions"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/student_dashboard.js') }}"></script>
+{% endblock %}
