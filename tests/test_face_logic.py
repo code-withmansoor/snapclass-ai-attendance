@@ -1,9 +1,10 @@
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
 from src.database.db import deduplicate_attendance_logs
-from src.pipelines.face_pipeline import choose_best_face_match
+from src.pipelines.face_pipeline import choose_best_face_match, predict_attendance
 
 
 class FaceMatchingTests(unittest.TestCase):
@@ -54,6 +55,12 @@ class FaceMatchingTests(unittest.TestCase):
         deduped = deduplicate_attendance_logs(logs)
         self.assertEqual(len(deduped), 3)
         self.assertEqual({row["student_id"] for row in deduped}, {1, 2})
+
+    @patch("src.pipelines.face_pipeline.get_face_embeddings", return_value=[])
+    def test_predict_attendance_returns_details_when_no_faces_found(self, _get_face_embeddings):
+        result = predict_attendance(np.zeros((100, 100, 3), dtype=np.uint8), return_details=True)
+
+        self.assertEqual(result, ({}, [], 0, []))
 
 
 if __name__ == "__main__":

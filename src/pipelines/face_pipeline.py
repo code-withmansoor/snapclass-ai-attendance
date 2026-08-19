@@ -169,6 +169,8 @@ def predict_attendance(
     encodings = get_face_embeddings(class_image_np)
     logger.info("[ATTENDANCE PERFORMANCE] face_detection_ms=%.2f", (time.perf_counter() - detection_started) * 1000)
     if not encodings:
+        if return_details:
+            return {}, [], 0, []
         return {}, [], 0
 
     threshold = FACE_MATCH_THRESHOLD if threshold is None else float(threshold)
