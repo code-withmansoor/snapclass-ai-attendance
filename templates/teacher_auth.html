@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Teacher Portal — SnapClass{% endblock %}
+{% block title %}Teacher Portal — Snap AI{% endblock %}
 {% block nav_teacher %}active{% endblock %}
 
 {% block content %}
@@ -21,6 +21,7 @@
       <div class="field">
         <input type="password" id="loginPassword" placeholder=" " autocomplete="current-password">
         <label>Password</label>
+        <button class="password-toggle" type="button" aria-label="Show password" data-password-toggle="loginPassword">Show</button>
         <div class="field-hint"></div>
       </div>
       <div class="divider"></div>
@@ -49,11 +50,13 @@
       <div class="field">
         <input type="password" id="regPassword" placeholder=" " autocomplete="new-password">
         <label>Password</label>
+        <button class="password-toggle" type="button" aria-label="Show password" data-password-toggle="regPassword">Show</button>
         <div class="field-hint"></div>
       </div>
       <div class="field">
         <input type="password" id="regConfirm" placeholder=" " autocomplete="new-password">
         <label>Confirm password</label>
+        <button class="password-toggle" type="button" aria-label="Show password" data-password-toggle="regConfirm">Show</button>
         <div class="field-hint"></div>
       </div>
       <div class="divider"></div>

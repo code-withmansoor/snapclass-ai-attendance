@@ -186,3 +186,14 @@ def get_attendance_for_teacher(teacher_id):
         .execute()
     )
     return response.data
+
+
+def get_attendance_session_for_teacher(teacher_id, session_timestamp):
+    response = (
+        supabase.table("attendance_logs")
+        .select("*, students(*), subjects!inner(*)")
+        .eq("subjects.teacher_id", teacher_id)
+        .eq("timestamp", session_timestamp)
+        .execute()
+    )
+    return response.data

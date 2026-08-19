@@ -8,6 +8,19 @@
   let voiceChunks = [];
   let voiceAudioDataUrl = null;
   let pendingLogs = null;
+  let currentSessionId = null;
+
+  function setAnalysisStage(stage) {
+    const progress = document.getElementById("analysisProgress");
+    if (!progress) return;
+    progress.style.display = "flex";
+    const stages = [...progress.querySelectorAll("[data-stage]")];
+    const currentIndex = stages.findIndex((item) => item.dataset.stage === stage);
+    stages.forEach((item, index) => {
+      item.classList.toggle("active", index === currentIndex);
+      item.classList.toggle("done", index < currentIndex);
+    });
+  }
 
   // ---------- Tabs (top level) ----------
   const tabButtons = document.querySelectorAll(".tab-btn[data-tab]");
@@ -165,6 +178,9 @@
   document.getElementById("runAnalysisBtn").addEventListener("click", async () => {
     const btn = document.getElementById("runAnalysisBtn");
     setButtonLoading(btn, true);
+    setAnalysisStage("upload");
+    setAnalysisStage("optimize");
+    setAnalysisStage("detect");
 
     const data = await apiCall("/api/teacher/attendance/photos/analyze", {
       method: "POST",
@@ -172,12 +188,15 @@
     });
 
     setButtonLoading(btn, false);
+    setAnalysisStage("match");
 
     if (!data.ok) {
+      document.getElementById("analysisProgress").style.display = "none";
       showToast(data.error || "Analysis failed", "error");
       return;
     }
-    showResults(data.results, data.logs);
+    setAnalysisStage("report");
+    showResults(data.results, data.logs, data.unknown_faces || 0);
   });
 
   document.getElementById("voiceAttendanceBtn").addEventListener("click", () => {
@@ -238,12 +257,14 @@
       return;
     }
     closeModal("voiceModal");
-    showResults(data.results, data.logs);
+    showResults(data.results, data.logs, data.unknown_faces || 0);
   });
 
 
-  function showResults(results, logs) {
+  function showResults(results, logs, unknownFaces = 0) {
     pendingLogs = logs;
+    currentSessionId = null;
+    document.getElementById("reportDownloadArea").style.display = "none";
     const tbody = document.getElementById("resultsTableBody");
     tbody.innerHTML = results
       .map(
@@ -270,6 +291,7 @@
     if (!pendingLogs) return;
     const btn = document.getElementById("confirmResultsBtn");
     setButtonLoading(btn, true);
+    setAnalysisStage("save");
     const data = await apiCall("/api/teacher/attendance/confirm", { method: "POST", body: { logs: pendingLogs } });
     setButtonLoading(btn, false);
 
@@ -278,10 +300,46 @@
       return;
     }
     showToast("Attendance taken", "success");
+    setAnalysisStage("report");
+    currentSessionId = data.session_id;
+    document.getElementById("reportDownloadArea").style.display = "block";
+    showToast("Report ready to download", "info");
     pendingLogs = null;
     attendancePhotos = [];
     renderGallery();
-    closeModal("resultsModal");
+  });
+
+  async function downloadReport(sessionId, button = null, format = "pdf") {
+    if (!sessionId || (button && button.disabled)) return;
+    const original = button ? button.innerHTML : "";
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Generating PDF... Please wait";
+    }
+    try {
+      const endpoint = format === "pdf" ? "download-attendance-pdf" : `download-attendance-export/${format}`;
+      const response = await fetch(`/${endpoint}/${encodeURIComponent(sessionId)}`);
+      if (!response.ok) throw new Error("PDF generation failed");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `SnapAI_Attendance_Report.${format}`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast(`${format.toUpperCase()} Download Started`, "success");
+    } catch (error) {
+      showToast("Unable to generate PDF. Please try again.", "error");
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.innerHTML = original;
+      }
+    }
+  }
+
+  document.getElementById("downloadReportBtn").addEventListener("click", (event) => {
+    downloadReport(currentSessionId, event.currentTarget);
   });
 
 
@@ -392,9 +450,17 @@
           <td>${r.subject}</td>
           <td>${r.subject_code}</td>
           <td>✅ ${r.present} / ${r.total} Students</td>
+          <td><div class="report-actions">
+            <button class="btn btn-tertiary btn-sm" data-export-format="pdf" data-download-session="${r.ts_group}">&#128196; PDF</button>
+            <button class="btn btn-ghost btn-sm" data-export-format="xlsx" data-download-session="${r.ts_group}">Excel</button>
+            <button class="btn btn-ghost btn-sm" data-export-format="csv" data-download-session="${r.ts_group}">CSV</button>
+          </div></td>
         </tr>`
       )
       .join("");
+    tbody.querySelectorAll("[data-download-session]").forEach((button) => {
+      button.addEventListener("click", () => downloadReport(button.dataset.downloadSession, button, button.dataset.exportFormat));
+    });
   }
 
 

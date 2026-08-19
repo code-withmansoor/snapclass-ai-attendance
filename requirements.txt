@@ -3,6 +3,7 @@ flask
 python-dotenv
 numpy
 pandas
+openpyxl
 scikit-learn
 dlib-bin
 git+https://github.com/ageitgey/face_recognition_models
@@ -11,6 +12,7 @@ supabase
 bcrypt
 segno
 pillow
+reportlab
 librosa
 resemblyzer
 gunicorn

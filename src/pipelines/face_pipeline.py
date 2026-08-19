@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 
 import dlib
 import face_recognition_models
@@ -91,8 +92,10 @@ def validate_registration_face(image_np):
     return {"ok": True, "message": "Face looks usable."}
 
 
-def build_candidate_map(subject_id=None, subject_student_ids=None):
-    if subject_id is not None:
+def build_candidate_map(subject_id=None, subject_student_ids=None, student_records=None):
+    if student_records is not None:
+        students = student_records
+    elif subject_id is not None:
         student_rows = get_subject_enrolled_students(subject_id)
         students = [node.get("students") for node in student_rows if node.get("students")]
     else:
@@ -121,18 +124,22 @@ def choose_best_face_match(detected_embedding, candidate_embeddings, threshold=N
     threshold = FACE_MATCH_THRESHOLD if threshold is None else float(threshold)
     min_margin = FACE_MATCH_MIN_MARGIN if min_margin is None else float(min_margin)
 
-    candidate_scores = []
+    student_ids = []
+    matrix_rows = []
     for student_id, embeddings in candidate_embeddings.items():
         for emb in embeddings:
-            distance = _distance_between(detected_embedding, emb)
-            candidate_scores.append((student_id, distance))
-
-    if not candidate_scores:
+            student_ids.append(int(student_id))
+            matrix_rows.append(emb)
+    if not matrix_rows:
         return None
 
-    best_student_id, best_distance = min(candidate_scores, key=lambda item: item[1])
+    matrix = np.vstack(matrix_rows)
+    distances = np.linalg.norm(matrix - np.asarray(detected_embedding, dtype=float), axis=1)
+    best_index = int(np.argmin(distances))
+    best_student_id = student_ids[best_index]
+    best_distance = float(distances[best_index])
     second_best_distance = min(
-        (distance for student_id, distance in candidate_scores if student_id != best_student_id),
+        (float(distance) for index, distance in enumerate(distances) if student_ids[index] != best_student_id),
         default=None,
     )
 
@@ -149,31 +156,31 @@ def choose_best_face_match(detected_embedding, candidate_embeddings, threshold=N
     }
 
 
-def predict_attendance(class_image_np, subject_id=None, subject_student_ids=None, threshold=None, min_margin=None):
+def predict_attendance(
+    class_image_np,
+    subject_id=None,
+    subject_student_ids=None,
+    threshold=None,
+    min_margin=None,
+    candidate_map=None,
+    return_details=False,
+):
+    detection_started = time.perf_counter()
     encodings = get_face_embeddings(class_image_np)
+    logger.info("[ATTENDANCE PERFORMANCE] face_detection_ms=%.2f", (time.perf_counter() - detection_started) * 1000)
     if not encodings:
         return {}, [], 0
 
     threshold = FACE_MATCH_THRESHOLD if threshold is None else float(threshold)
     min_margin = FACE_MATCH_MIN_MARGIN if min_margin is None else float(min_margin)
 
-    candidate_map = build_candidate_map(subject_id=subject_id, subject_student_ids=subject_student_ids)
+    candidate_map = candidate_map or build_candidate_map(subject_id=subject_id, subject_student_ids=subject_student_ids)
     logger.info("[FACE DETECTION] Detected faces: %s", len(encodings))
 
     detected_students = {}
     face_details = []
+    matching_started = time.perf_counter()
     for face_index, encoding in enumerate(encodings, 1):
-        candidate_scores = []
-        for student_id, embeddings in candidate_map.items():
-            for emb in embeddings:
-                candidate_scores.append((student_id, _distance_between(encoding, emb)))
-
-        sorted_candidates = sorted(candidate_scores, key=lambda item: item[1])
-        logger.info("[FACE MATCH] Face #%s", face_index)
-        for student_id, distance in sorted_candidates[:10]:
-            logger.info("Candidate: %s Distance: %.4f", student_id, distance)
-        logger.info("Threshold: %.4f", threshold)
-
         match_result = choose_best_face_match(encoding, candidate_map, threshold=threshold, min_margin=min_margin)
         if match_result:
             detected_students[int(match_result["student_id"])] = {
@@ -181,12 +188,13 @@ def predict_attendance(class_image_np, subject_id=None, subject_student_ids=None
                 "threshold": threshold,
                 "status": "MATCH",
             }
-            logger.info("Decision: %s -> MATCH", match_result["student_id"])
             face_details.append({"face_index": face_index, "student_id": match_result["student_id"], "distance": match_result["distance"], "decision": "MATCH"})
         else:
-            logger.info("Decision: UNKNOWN")
             face_details.append({"face_index": face_index, "student_id": None, "distance": None, "decision": "UNKNOWN"})
 
+    logger.info("[ATTENDANCE PERFORMANCE] face_matching_ms=%.2f", (time.perf_counter() - matching_started) * 1000)
+    if return_details:
+        return detected_students, list(candidate_map.keys()), len(encodings), face_details
     return detected_students, list(candidate_map.keys()), len(encodings)
 
 

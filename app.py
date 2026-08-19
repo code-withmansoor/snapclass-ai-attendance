@@ -1,11 +1,14 @@
 import base64
+import csv
 import io
+import logging
 import os
+import time
 from datetime import datetime
 
 import numpy as np
 import segno
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session, send_file
 from PIL import Image
 
 from src.database.db import (
@@ -15,6 +18,7 @@ from src.database.db import (
     get_teacher_by_id,
     get_teacher_subjects,
     get_attendance_for_teacher,
+    get_attendance_session_for_teacher,
     create_subject,
     get_subject_by_id,
     get_subject_by_code,
@@ -37,9 +41,11 @@ from src.pipelines.face_pipeline import (
     train_classifier,
     validate_registration_face,
 )
+from src.utils.pdf_generator import generate_attendance_pdf
 from src.pipelines.voice_pipeline import get_voice_embedding, process_bulk_audio
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+logger = logging.getLogger(__name__)
 
 app = Flask(
     __name__,
@@ -60,6 +66,17 @@ def decode_data_url_image(data_url):
     raw = base64.b64decode(data_url)
     img = Image.open(io.BytesIO(raw)).convert("RGB")
     return np.array(img), img
+
+
+def optimize_attendance_image(data_url, max_dimension=1600):
+    """Decode and downsample oversized uploads while preserving face detail."""
+    image_np, image = decode_data_url_image(data_url)
+    width, height = image.size
+    scale = min(1.0, max_dimension / max(width, height))
+    if scale < 1:
+        image = image.resize((max(1, int(width * scale)), max(1, int(height * scale))), Image.Resampling.LANCZOS)
+        image_np = np.asarray(image)
+    return image_np
 
 
 def decode_data_url_bytes(data_url):
@@ -413,23 +430,35 @@ def api_teacher_photos_analyze():
     if not subject_id:
         return jsonify({"ok": False, "error": "Missing subject ID"}), 400
 
-    all_detected_ids = {}
-    for idx, image_data_url in enumerate(images):
-        img_np, _ = decode_data_url_image(image_data_url)
-        detected, _, _ = predict_attendance(
-            img_np,
-            subject_id=subject_id,
-            subject_student_ids=[node["students"]["student_id"] for node in get_subject_enrolled_students(subject_id)],
-            threshold=0.45,
-            min_margin=0.05,
-        )
-        for sid in detected.keys():
-            student_id = int(sid)
-            all_detected_ids.setdefault(student_id, []).append(f"Photo {idx + 1}")
-
     enrolled_students = get_subject_enrolled_students(subject_id)
     if not enrolled_students:
         return jsonify({"ok": False, "error": "No students enrolled in this course"}), 400
+
+    student_records = [node["students"] for node in enrolled_students if node.get("students")]
+    candidate_map = build_candidate_map(student_records=student_records)
+    all_detected_ids = {}
+    unknown_faces = 0
+    timings = {"image_loading_ms": 0.0, "face_detection_ms": 0.0, "face_matching_ms": 0.0}
+    total_started = time.perf_counter()
+    for idx, image_data_url in enumerate(images):
+        loading_started = time.perf_counter()
+        img_np = optimize_attendance_image(image_data_url)
+        timings["image_loading_ms"] += (time.perf_counter() - loading_started) * 1000
+        detection_started = time.perf_counter()
+        detected, _, _, face_details = predict_attendance(
+            img_np,
+            threshold=0.45,
+            min_margin=0.05,
+            candidate_map=candidate_map,
+            return_details=True,
+        )
+        detection_elapsed = (time.perf_counter() - detection_started) * 1000
+        timings["face_detection_ms"] += detection_elapsed
+        timings["face_matching_ms"] += detection_elapsed
+        unknown_faces += sum(1 for detail in face_details if detail["decision"] == "UNKNOWN")
+        for sid in detected.keys():
+            student_id = int(sid)
+            all_detected_ids.setdefault(student_id, []).append(f"Photo {idx + 1}")
 
     results, attendance_to_log = [], []
     current_timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
@@ -465,7 +494,9 @@ def api_teacher_photos_analyze():
         seen.add(key)
         unique_logs.append(log)
 
-    return jsonify({"ok": True, "results": results, "logs": unique_logs})
+    timings["total_ms"] = (time.perf_counter() - total_started) * 1000
+    logger.info("[ATTENDANCE PERFORMANCE] %s", {key: round(value, 2) for key, value in timings.items()})
+    return jsonify({"ok": True, "results": results, "logs": unique_logs, "unknown_faces": unknown_faces, "timings": timings})
 
 
 @app.route("/api/teacher/attendance/voice/analyze", methods=["POST"])
@@ -536,9 +567,15 @@ def api_teacher_attendance_confirm():
     if not logs:
         return jsonify({"ok": False, "error": "Nothing to save"}), 400
 
+    save_started = time.perf_counter()
     try:
+        existing_session = get_attendance_session_for_teacher(teacher["teacher_id"], str(logs[0].get("timestamp")))
+        if existing_session:
+            return jsonify({"ok": False, "error": "This attendance session was already saved."}), 409
         create_attendance(logs)
-        return jsonify({"ok": True})
+        session_id = str(logs[0].get("timestamp"))
+        logger.info("[ATTENDANCE PERFORMANCE] database_saving_ms=%.2f", (time.perf_counter() - save_started) * 1000)
+        return jsonify({"ok": True, "session_id": session_id})
     except Exception:
         return jsonify({"ok": False, "error": "Sync failed!"}), 500
 
@@ -582,6 +619,69 @@ def api_teacher_attendance_records():
 
     rows.sort(key=lambda r: r["ts_group"], reverse=True)
     return jsonify({"ok": True, "records": rows})
+
+
+@app.route("/download-attendance-pdf/<path:session_id>")
+def download_attendance_pdf(session_id):
+    teacher = current_teacher()
+    if not teacher:
+        return jsonify({"ok": False, "error": "Not logged in"}), 401
+
+    records = get_attendance_session_for_teacher(teacher["teacher_id"], session_id)
+    if not records:
+        return jsonify({"ok": False, "error": "Attendance session not found"}), 404
+
+    subject = records[0].get("subjects") or {}
+    pdf_buffer = generate_attendance_pdf(
+        session_id=session_id,
+        teacher=teacher,
+        subject=subject,
+        records=records,
+        unknown_faces=0,
+    )
+    date_label = session_id[:10] if len(session_id) >= 10 else datetime.now().strftime("%Y-%m-%d")
+    code = subject.get("subject_code", "Report")
+    filename = f"SnapAI_Attendance_{code}_{date_label}.pdf"
+    return send_file(pdf_buffer, as_attachment=True, download_name=filename, mimetype="application/pdf")
+
+
+@app.route("/download-attendance-export/<export_format>/<path:session_id>")
+def download_attendance_export(export_format, session_id):
+    teacher = current_teacher()
+    if not teacher:
+        return jsonify({"ok": False, "error": "Not logged in"}), 401
+    if export_format not in {"csv", "xlsx"}:
+        return jsonify({"ok": False, "error": "Unsupported export format"}), 400
+
+    records = get_attendance_session_for_teacher(teacher["teacher_id"], session_id)
+    if not records:
+        return jsonify({"ok": False, "error": "Attendance session not found"}), 404
+    rows = []
+    for record in records:
+        student = record.get("students") or {}
+        rows.append({
+            "Student ID": student.get("student_id", record.get("student_id", "")),
+            "Student Name": student.get("name", ""),
+            "Status": "Present" if record.get("is_present") else "Absent",
+            "Timestamp": record.get("timestamp", session_id),
+        })
+
+    output = io.BytesIO()
+    code = (records[0].get("subjects") or {}).get("subject_code", "Report")
+    date_label = session_id[:10]
+    if export_format == "csv":
+        text_buffer = io.StringIO()
+        writer = csv.DictWriter(text_buffer, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+        output.write(text_buffer.getvalue().encode("utf-8"))
+        mimetype, extension = "text/csv", "csv"
+    else:
+        import pandas as pd
+        pd.DataFrame(rows).to_excel(output, index=False, engine="openpyxl")
+        mimetype, extension = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"
+    output.seek(0)
+    return send_file(output, as_attachment=True, download_name=f"SnapAI_Attendance_{code}_{date_label}.{extension}", mimetype=mimetype)
 
 
 if __name__ == "__main__":

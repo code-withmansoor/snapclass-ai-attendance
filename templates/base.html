@@ -3,12 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}SnapClass — AI Powered Attendance{% endblock %}</title>
-  <link rel="icon" href="https://i.ibb.co/YTYGn5qV/logo.png">
+  <title>{% block title %}Snap AI — Smart Attendance{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   {% block extra_css %}{% endblock %}
 </head>
 <body>
+  <div class="preloader" id="preloader" aria-label="Loading Snap AI" role="status">
+    <div class="logo-mark logo-mark-loader" aria-hidden="true">
+      <span class="logo-corner corner-tl"></span><span class="logo-corner corner-tr"></span>
+      <span class="logo-corner corner-bl"></span><span class="logo-corner corner-br"></span>
+      <span class="logo-lens"></span><span class="logo-scan"></span><span class="logo-check">&#10003;</span>
+    </div>
+    <strong>SNAP <span>AI</span></strong>
+    <small>Initializing vision system</small>
+  </div>
+  <div class="scroll-progress" id="scrollProgress"></div>
 
   
   <div class="bg-layer">
@@ -24,15 +34,19 @@
   
   <nav class="navbar">
     <a class="brand" href="{{ url_for('home') }}">
-      <img src="https://i.ibb.co/YTYGn5qV/logo.png" alt="SnapClass logo">
-      <span class="gradient-text">SnapClass</span>
+      <span class="logo-mark" aria-hidden="true">
+        <span class="logo-corner corner-tl"></span><span class="logo-corner corner-tr"></span>
+        <span class="logo-corner corner-bl"></span><span class="logo-corner corner-br"></span>
+        <span class="logo-lens"></span><span class="logo-scan"></span><span class="logo-check">&#10003;</span>
+      </span>
+      <span class="brand-copy"><b>SNAP</b> <span>AI</span><small>SMART ATTENDANCE</small></span>
     </a>
     <div class="nav-links">
       <a class="nav-link {% block nav_home %}{% endblock %}" href="{{ url_for('home') }}">Home</a>
       <a class="nav-link {% block nav_student %}{% endblock %}" href="{{ url_for('student_page') }}">Student Portal</a>
       <a class="nav-link {% block nav_teacher %}{% endblock %}" href="{{ url_for('teacher_page') }}">Teacher Portal</a>
     </div>
-    <button class="hamburger" id="hamburgerBtn"><span></span><span></span><span></span></button>
+    <button class="hamburger" id="hamburgerBtn" aria-label="Open navigation" aria-expanded="false"><span></span><span></span><span></span></button>
   </nav>
 
   <main style="padding-top: 5.5rem; min-height: 100vh; position: relative; z-index: 1;">
@@ -40,8 +54,10 @@
   </main>
 
   <footer class="flex-center" style="padding: 2.5rem 1rem; gap: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">
-    <span>Created ❤️ Mansoor  &mdash; SnapClass</span>
+    <span>Created by Mansoor &mdash; Snap AI</span>
   </footer>
+
+  <button class="back-to-top" id="backToTop" aria-label="Back to top" title="Back to top">&#8593;</button>
 
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   {% block extra_js %}{% endblock %}

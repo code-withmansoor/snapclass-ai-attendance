@@ -129,6 +129,19 @@ function initFloatingLabels(scope = document) {
   });
 }
 
+function initPasswordToggles(scope = document) {
+  scope.querySelectorAll("[data-password-toggle]").forEach((toggle) => {
+    const input = document.getElementById(toggle.getAttribute("data-password-toggle"));
+    if (!input) return;
+    toggle.addEventListener("click", () => {
+      const visible = input.type === "text";
+      input.type = visible ? "password" : "text";
+      toggle.textContent = visible ? "Show" : "Hide";
+      toggle.setAttribute("aria-label", `${visible ? "Show" : "Hide"} password`);
+    });
+  });
+}
+
 function fieldError(fieldEl, message) {
   fieldEl.classList.add("error");
   fieldEl.classList.remove("success");
@@ -162,8 +175,29 @@ function initNavbar() {
     hamburger.addEventListener("click", () => {
       hamburger.classList.toggle("open");
       links.classList.toggle("mobile-open");
+      hamburger.setAttribute("aria-expanded", hamburger.classList.contains("open"));
     });
+    links.querySelectorAll(".nav-link").forEach((link) => link.addEventListener("click", () => {
+      hamburger.classList.remove("open");
+      links.classList.remove("mobile-open");
+      hamburger.setAttribute("aria-expanded", "false");
+    }));
   }
+}
+
+function initSharedChrome() {
+  const preloader = document.getElementById("preloader");
+  if (preloader) window.addEventListener("load", () => setTimeout(() => preloader.classList.add("loaded"), 260), { once: true });
+  const progress = document.getElementById("scrollProgress");
+  const backToTop = document.getElementById("backToTop");
+  const updateScroll = () => {
+    const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+    if (progress) progress.style.width = `${scrollable > 0 ? (window.scrollY / scrollable) * 100 : 0}%`;
+    if (backToTop) backToTop.classList.toggle("visible", window.scrollY > 420);
+  };
+  window.addEventListener("scroll", updateScroll, { passive: true });
+  updateScroll();
+  if (backToTop) backToTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
 }
 
 
@@ -282,8 +316,10 @@ function initParticles() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initNavbar();
+  initSharedChrome();
   initReveal();
   initParticles();
   initCounters();
   initFloatingLabels();
+  initPasswordToggles();
 });
