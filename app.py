@@ -1,4 +1,5 @@
 import base64
+import binascii
 import csv
 import io
 import logging
@@ -9,7 +10,7 @@ from datetime import datetime
 import numpy as np
 import segno
 from flask import Flask, render_template, request, jsonify, session, send_file
-from PIL import Image
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from src.database.db import (
     check_teacher_exists,
@@ -59,24 +60,50 @@ APP_DOMAIN = os.environ.get("APP_DOMAIN", "http://localhost:5000")
 
 
 
-def decode_data_url_image(data_url):
-    """Accepts a `data:image/...;base64,....` string and returns an RGB numpy array."""
-    if "," in data_url:
-        data_url = data_url.split(",", 1)[1]
-    raw = base64.b64decode(data_url)
-    img = Image.open(io.BytesIO(raw)).convert("RGB")
-    return np.array(img), img
+ALLOWED_IMAGE_MIME_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+}
+
+
+def decode_data_url_image(data_url, max_dimension=1600):
+    """Decode a browser image into an EXIF-corrected, bounded RGB NumPy array."""
+    if not isinstance(data_url, str) or not data_url.strip():
+        raise ValueError("Invalid or empty image data")
+
+    encoded_data = data_url
+    if data_url.startswith("data:"):
+        header, separator, encoded_data = data_url.partition(",")
+        if not separator or ";base64" not in header.lower():
+            raise ValueError("Image must be a base64 data URL")
+        mime_type = header[5:].split(";", 1)[0].lower()
+        if mime_type not in ALLOWED_IMAGE_MIME_TYPES:
+            raise ValueError("Unsupported image format. Use JPEG, PNG, or WebP.")
+
+    try:
+        raw = base64.b64decode(encoded_data, validate=True)
+        image = Image.open(io.BytesIO(raw))
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        image.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+        image.load()
+    except (ValueError, binascii.Error, UnidentifiedImageError, OSError) as exc:
+        raise ValueError("The uploaded image is corrupted or unsupported") from exc
+
+    return np.asarray(image), image
 
 
 def optimize_attendance_image(data_url, max_dimension=1600):
     """Decode and downsample oversized uploads while preserving face detail."""
-    image_np, image = decode_data_url_image(data_url)
-    width, height = image.size
-    scale = min(1.0, max_dimension / max(width, height))
-    if scale < 1:
-        image = image.resize((max(1, int(width * scale)), max(1, int(height * scale))), Image.Resampling.LANCZOS)
-        image_np = np.asarray(image)
+    image_np, _ = decode_data_url_image(data_url, max_dimension=max_dimension)
     return image_np
+
+
+@app.errorhandler(413)
+def request_entity_too_large(_error):
+    return jsonify({"ok": False, "success": False, "error": "Uploaded image data is too large"}), 413
 
 
 def decode_data_url_bytes(data_url):
@@ -418,85 +445,88 @@ def api_teacher_subject_share(code):
 def api_teacher_photos_analyze():
     teacher = current_teacher()
     if not teacher:
-        return jsonify({"ok": False, "error": "Not logged in"}), 401
+        return jsonify({"ok": False, "success": False, "error": "Not logged in"}), 401
 
-    data = request.get_json(force=True)
-    subject_id = data.get("subject_id")
-    images = data.get("images", [])  # list of data URLs
+    try:
+        data = request.get_json(silent=True) or {}
+        subject_id = data.get("subject_id")
+        images = data.get("images", [])
 
-    if not images:
-        return jsonify({"ok": False, "error": "No photos supplied"}), 400
+        if not images:
+            return jsonify({"ok": False, "success": False, "error": "No photos supplied"}), 400
+        if not subject_id:
+            return jsonify({"ok": False, "success": False, "error": "Missing subject ID"}), 400
+        if not isinstance(images, list):
+            return jsonify({"ok": False, "success": False, "error": "Invalid image list"}), 400
 
-    if not subject_id:
-        return jsonify({"ok": False, "error": "Missing subject ID"}), 400
+        enrolled_students = get_subject_enrolled_students(subject_id)
+        if not enrolled_students:
+            return jsonify({"ok": False, "success": False, "error": "No students enrolled in this course"}), 400
 
-    enrolled_students = get_subject_enrolled_students(subject_id)
-    if not enrolled_students:
-        return jsonify({"ok": False, "error": "No students enrolled in this course"}), 400
+        student_records = [node["students"] for node in enrolled_students if node.get("students")]
+        candidate_map = build_candidate_map(student_records=student_records)
+        all_detected_ids = {}
+        unknown_faces = 0
+        timings = {"image_loading_ms": 0.0, "face_detection_ms": 0.0, "face_matching_ms": 0.0}
+        total_started = time.perf_counter()
+        for idx, image_data_url in enumerate(images):
+            loading_started = time.perf_counter()
+            img_np = optimize_attendance_image(image_data_url)
+            timings["image_loading_ms"] += (time.perf_counter() - loading_started) * 1000
+            detection_started = time.perf_counter()
+            detected, _, _, face_details = predict_attendance(
+                img_np,
+                threshold=0.45,
+                min_margin=0.05,
+                candidate_map=candidate_map,
+                return_details=True,
+            )
+            detection_elapsed = (time.perf_counter() - detection_started) * 1000
+            timings["face_detection_ms"] += detection_elapsed
+            timings["face_matching_ms"] += detection_elapsed
+            unknown_faces += sum(1 for detail in face_details if detail["decision"] == "UNKNOWN")
+            for sid in detected.keys():
+                student_id = int(sid)
+                all_detected_ids.setdefault(student_id, []).append(f"Photo {idx + 1}")
 
-    student_records = [node["students"] for node in enrolled_students if node.get("students")]
-    candidate_map = build_candidate_map(student_records=student_records)
-    all_detected_ids = {}
-    unknown_faces = 0
-    timings = {"image_loading_ms": 0.0, "face_detection_ms": 0.0, "face_matching_ms": 0.0}
-    total_started = time.perf_counter()
-    for idx, image_data_url in enumerate(images):
-        loading_started = time.perf_counter()
-        img_np = optimize_attendance_image(image_data_url)
-        timings["image_loading_ms"] += (time.perf_counter() - loading_started) * 1000
-        detection_started = time.perf_counter()
-        detected, _, _, face_details = predict_attendance(
-            img_np,
-            threshold=0.45,
-            min_margin=0.05,
-            candidate_map=candidate_map,
-            return_details=True,
-        )
-        detection_elapsed = (time.perf_counter() - detection_started) * 1000
-        timings["face_detection_ms"] += detection_elapsed
-        timings["face_matching_ms"] += detection_elapsed
-        unknown_faces += sum(1 for detail in face_details if detail["decision"] == "UNKNOWN")
-        for sid in detected.keys():
-            student_id = int(sid)
-            all_detected_ids.setdefault(student_id, []).append(f"Photo {idx + 1}")
+        results, attendance_to_log = [], []
+        current_timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        for node in enrolled_students:
+            student = node["students"]
+            sources = all_detected_ids.get(int(student["student_id"]), [])
+            is_present = len(sources) > 0
+            results.append(
+                {
+                    "name": student["name"],
+                    "id": student["student_id"],
+                    "source": ", ".join(sources) if is_present else "-",
+                    "present": is_present,
+                }
+            )
+            attendance_to_log.append(
+                {
+                    "student_id": student["student_id"],
+                    "subject_id": subject_id,
+                    "timestamp": current_timestamp,
+                    "is_present": bool(is_present),
+                }
+            )
 
-    results, attendance_to_log = [], []
-    current_timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        unique_logs = []
+        seen = set()
+        for log in attendance_to_log:
+            key = (int(log["student_id"]), int(log["subject_id"]), str(log["timestamp"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_logs.append(log)
 
-    for node in enrolled_students:
-        student = node["students"]
-        sources = all_detected_ids.get(int(student["student_id"]), [])
-        is_present = len(sources) > 0
-
-        results.append(
-            {
-                "name": student["name"],
-                "id": student["student_id"],
-                "source": ", ".join(sources) if is_present else "-",
-                "present": is_present,
-            }
-        )
-        attendance_to_log.append(
-            {
-                "student_id": student["student_id"],
-                "subject_id": subject_id,
-                "timestamp": current_timestamp,
-                "is_present": bool(is_present),
-            }
-        )
-
-    unique_logs = []
-    seen = set()
-    for log in attendance_to_log:
-        key = (int(log["student_id"]), int(log["subject_id"]), str(log["timestamp"]))
-        if key in seen:
-            continue
-        seen.add(key)
-        unique_logs.append(log)
-
-    timings["total_ms"] = (time.perf_counter() - total_started) * 1000
-    logger.info("[ATTENDANCE PERFORMANCE] %s", {key: round(value, 2) for key, value in timings.items()})
-    return jsonify({"ok": True, "results": results, "logs": unique_logs, "unknown_faces": unknown_faces, "timings": timings})
+        timings["total_ms"] = (time.perf_counter() - total_started) * 1000
+        logger.info("[ATTENDANCE PERFORMANCE] %s", {key: round(value, 2) for key, value in timings.items()})
+        return jsonify({"ok": True, "success": True, "results": results, "logs": unique_logs, "unknown_faces": unknown_faces, "timings": timings})
+    except Exception as exc:
+        logger.exception("Face attendance analysis failed")
+        return jsonify({"ok": False, "success": False, "error": str(exc) or "Face analysis failed"}), 500
 
 
 @app.route("/api/teacher/attendance/voice/analyze", methods=["POST"])

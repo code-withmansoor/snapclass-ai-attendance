@@ -9,13 +9,23 @@ async function apiCall(url, options = {}) {
     opts.body = JSON.stringify(opts.body);
   }
   const res = await fetch(url, opts);
-  let data;
+  const responseText = await res.text();
+  let data = {};
   try {
-    data = await res.json();
+    data = responseText ? JSON.parse(responseText) : {};
   } catch (e) {
-    data = { ok: false, error: "Unexpected server response" };
+    console.error("Server returned:", responseText);
+    return {
+      ok: false,
+      success: false,
+      error: `Server error (${res.status}). Please check server logs.`,
+    };
   }
-  if (!res.ok && data.ok === undefined) data.ok = false;
+  if (!res.ok) {
+    data.ok = false;
+    data.success = false;
+    data.error = data.error || data.message || `Request failed (${res.status})`;
+  }
   return data;
 }
 

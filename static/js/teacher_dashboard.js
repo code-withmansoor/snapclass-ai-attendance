@@ -140,14 +140,31 @@
       showToast("Camera not ready yet", "warning");
       return;
     }
+    const scale = Math.min(1, 1600 / Math.max(video.videoWidth, video.videoHeight));
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
     canvas.getContext("2d").drawImage(video, 0, 0);
     attendancePhotos.push(canvas.toDataURL("image/jpeg", 0.9));
     renderGallery();
     showToast("Photo Captured", "success");
   });
+
+  function prepareUploadedImage(dataUrl, maxDimension = 1600) {
+    return new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.88));
+      };
+      image.onerror = () => resolve(dataUrl);
+      image.src = dataUrl;
+    });
+  }
 
   document.getElementById("fileUploadInput").addEventListener("change", (e) => {
     const files = Array.from(e.target.files || []);
@@ -156,12 +173,14 @@
     files.forEach((f) => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        attendancePhotos.push(reader.result);
-        remaining -= 1;
-        if (remaining === 0) {
-          renderGallery();
-          showToast("Photos uploaded successfully", "success");
-        }
+        prepareUploadedImage(reader.result).then((preparedImage) => {
+          attendancePhotos.push(preparedImage);
+          remaining -= 1;
+          if (remaining === 0) {
+            renderGallery();
+            showToast("Photos uploaded successfully", "success");
+          }
+        });
       };
       reader.readAsDataURL(f);
     });
